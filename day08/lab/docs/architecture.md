@@ -18,7 +18,7 @@
 ```
 
 **Mô tả ngắn gọn:**
-> TODO: Mô tả hệ thống trong 2-3 câu. Nhóm xây gì? Cho ai dùng? Giải quyết vấn đề gì?
+Hệ thống RAG nội bộ phục vụ CS Helpdesk và IT Support, trả lời câu hỏi về chính sách hoàn tiền, SLA ticket, quy trình cấp quyền và HR FAQ dựa trên 5 tài liệu nội bộ. Pipeline đảm bảo mọi câu trả lời đều có trích dẫn nguồn và tự động abstain khi không đủ bằng chứng, tránh hallucination.
 
 ---
 
@@ -27,24 +27,26 @@
 ### Tài liệu được index
 | File | Nguồn | Department | Số chunk |
 |------|-------|-----------|---------|
-| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | TODO |
-| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | TODO |
-| `access_control_sop.txt` | it/access-control-sop.md | IT Security | TODO |
-| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | TODO |
-| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | TODO |
+| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | 6 |
+| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | 5 |
+| `access_control_sop.txt` | it/access-control-sop.md | IT Security | 7 |
+| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | 6 |
+| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | 5 |
+
+**Tổng: 29 chunks**
 
 ### Quyết định chunking
 | Tham số | Giá trị | Lý do |
 |---------|---------|-------|
-| Chunk size | TODO tokens | TODO |
-| Overlap | TODO tokens | TODO |
-| Chunking strategy | Heading-based / paragraph-based | TODO |
+| Chunk size | 400 tokens (~1600 ký tự) | Đủ ngữ cảnh cho 1 điều khoản, không quá dài gây lost-in-the-middle |
+| Overlap | 80 tokens (~320 ký tự) | Tránh mất thông tin khi điều khoản nằm ở ranh giới chunk |
+| Chunking strategy | Heading-based (split tại `=== ... ===`) | Tài liệu có cấu trúc section rõ ràng; cắt tự nhiên theo điều khoản |
 | Metadata fields | source, section, effective_date, department, access | Phục vụ filter, freshness, citation |
 
 ### Embedding model
-- **Model**: TODO (OpenAI text-embedding-3-small / paraphrase-multilingual-MiniLM-L12-v2)
-- **Vector store**: ChromaDB (PersistentClient)
-- **Similarity metric**: Cosine
+- **Model**: OpenAI `text-embedding-3-small` (1536 dimensions)
+- **Vector store**: ChromaDB `PersistentClient` — lưu local tại `chroma_db/`
+- **Similarity metric**: Cosine (cấu hình `hnsw:space: cosine`)
 
 ---
 
@@ -61,15 +63,15 @@
 ### Variant (Sprint 3)
 | Tham số | Giá trị | Thay đổi so với baseline |
 |---------|---------|------------------------|
-| Strategy | TODO (hybrid / dense) | TODO |
-| Top-k search | TODO | TODO |
-| Top-k select | TODO | TODO |
-| Rerank | TODO (cross-encoder / MMR) | TODO |
-| Query transform | TODO (expansion / HyDE / decomposition) | TODO |
+| Strategy | Hybrid (dense + BM25 Reciprocal Rank Fusion) | Thay dense-only → hybrid |
+| Dense weight | 0.6 | Mới |
+| Sparse weight | 0.4 | Mới |
+| Top-k search | 10 | Giữ nguyên |
+| Top-k select | 3 | Giữ nguyên |
+| RRF constant | 60 (chuẩn) | Mới |
 
-**Lý do chọn variant này:**
-> TODO: Giải thích tại sao chọn biến này để tune.
-> Ví dụ: "Chọn hybrid vì corpus có cả câu tự nhiên (policy) lẫn mã lỗi và tên chuyên ngành (SLA ticket P1, ERR-403)."
+**Lý do chọn Hybrid:**
+Corpus trộn lẫn hai loại nội dung: (1) câu tự nhiên tiếng Việt (policy, HR) — dense xử lý tốt qua ngữ nghĩa; (2) keyword kỹ thuật chính xác ("P1", "Level 3", "ERR-403", "IT-ACCESS") — BM25 tìm kiếm chính xác hơn. Hybrid RRF kết hợp điểm mạnh của cả hai, phù hợp với đặc điểm corpus IT/CS helpdesk.
 
 ---
 
@@ -96,7 +98,7 @@ Answer:
 ### LLM Configuration
 | Tham số | Giá trị |
 |---------|---------|
-| Model | TODO (gpt-4o-mini / gemini-1.5-flash) |
+| Model | gpt-4o-mini |
 | Temperature | 0 (để output ổn định cho eval) |
 | Max tokens | 512 |
 
@@ -118,19 +120,19 @@ Answer:
 
 ## 6. Diagram (tùy chọn)
 
-> TODO: Vẽ sơ đồ pipeline nếu có thời gian. Có thể dùng Mermaid hoặc drawio.
+> Sơ đồ pipeline đầy đủ (Sprint 2 baseline + Sprint 3 hybrid):
 
 ```mermaid
 graph LR
-    A[User Query] --> B[Query Embedding]
-    B --> C[ChromaDB Vector Search]
-    C --> D[Top-10 Candidates]
-    D --> E{Rerank?}
-    E -->|Yes| F[Cross-Encoder]
-    E -->|No| G[Top-3 Select]
-    F --> G
-    G --> H[Build Context Block]
-    H --> I[Grounded Prompt]
-    I --> J[LLM]
+    A[User Query] --> B[OpenAI Embedding\ntext-embedding-3-small]
+    A --> BM[BM25 Tokenize]
+    B --> C[ChromaDB Cosine Search\nTop-10]
+    BM --> D[BM25 Score\nTop-10]
+    C --> RRF[RRF Fusion\ndense×0.6 + sparse×0.4]
+    D --> RRF
+    RRF --> G[Top-3 Select]
+    G --> H[Build Context Block\n[N] source | section | score]
+    H --> I[Grounded Prompt\nEvidence-only + Abstain rule]
+    I --> J[gpt-4o-mini\ntemp=0, max_tokens=512]
     J --> K[Answer + Citation]
 ```
