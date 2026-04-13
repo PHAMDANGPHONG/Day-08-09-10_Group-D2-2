@@ -19,10 +19,38 @@ A/B Rule (từ slide):
 
 import json
 import csv
+import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from openai import OpenAI
 from rag_answer import rag_answer
+
+# --- LLM-as-Judge helper ---
+_judge_client = None
+
+
+def _get_judge_client() -> OpenAI:
+    global _judge_client
+    if _judge_client is None:
+        _judge_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return _judge_client
+
+
+def _llm_judge(prompt: str) -> dict:
+    """Gọi LLM để chấm điểm, trả về dict với score và reason."""
+    client = _get_judge_client()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+        max_tokens=200,
+        response_format={"type": "json_object"},
+    )
+    try:
+        return json.loads(response.choices[0].message.content)
+    except Exception:
+        return {"score": None, "reason": "parse error"}
 
 # =============================================================================
 # CẤU HÌNH
@@ -88,12 +116,17 @@ def score_faithfulness(
 
     Trả về dict với: score (1-5) và notes (lý do)
     """
-    # TODO Sprint 4: Implement scoring
-    # Tạm thời trả về None (yêu cầu chấm thủ công)
-    return {
-        "score": None,
-        "notes": "TODO: Chấm thủ công hoặc implement LLM-as-Judge",
-    }
+    context = "\n".join(c.get("text", "")[:300] for c in chunks_used)
+    prompt = (
+        f"Given the retrieved context below:\n{context}\n\n"
+        f"And this answer:\n{answer}\n\n"
+        "Rate the faithfulness of the answer on a scale of 1-5.\n"
+        "5 = every claim is fully grounded in the context.\n"
+        "1 = answer is mostly hallucinated / not grounded.\n"
+        'Output JSON only: {"score": <int 1-5>, "reason": "<one sentence>"}'
+    )
+    result = _llm_judge(prompt)
+    return {"score": result.get("score"), "notes": result.get("reason", "")}
 
 
 def score_answer_relevance(
@@ -113,10 +146,15 @@ def score_answer_relevance(
 
     TODO Sprint 4: Implement tương tự score_faithfulness
     """
-    return {
-        "score": None,
-        "notes": "TODO: Implement score_answer_relevance",
-    }
+    prompt = (
+        f"Question: {query}\nAnswer: {answer}\n\n"
+        "Rate how well the answer addresses the question, scale 1-5.\n"
+        "5 = directly and fully answers the question.\n"
+        "1 = completely off-topic or does not answer.\n"
+        'Output JSON only: {"score": <int 1-5>, "reason": "<one sentence>"}'
+    )
+    result = _llm_judge(prompt)
+    return {"score": result.get("score"), "notes": result.get("reason", "")}
 
 
 def score_context_recall(
@@ -198,10 +236,19 @@ def score_completeness(
          Rate completeness 1-5. Are all key points covered?
          Output: {'score': int, 'missing_points': [str]}"
     """
-    return {
-        "score": None,
-        "notes": "TODO: Implement score_completeness (so sánh với expected_answer)",
-    }
+    if not expected_answer:
+        return {"score": None, "notes": "No expected answer provided"}
+    prompt = (
+        f"Question: {query}\n"
+        f"Model Answer: {answer}\n"
+        f"Expected Answer: {expected_answer}\n\n"
+        "Rate how complete the model answer is compared to the expected answer, scale 1-5.\n"
+        "5 = all key points from expected answer are covered.\n"
+        "1 = most key information is missing.\n"
+        'Output JSON only: {"score": <int 1-5>, "reason": "<one sentence>"}'
+    )
+    result = _llm_judge(prompt)
+    return {"score": result.get("score"), "notes": result.get("reason", "")}
 
 
 # =============================================================================
@@ -441,6 +488,65 @@ Generated: {timestamp}
 
 
 # =============================================================================
+# GRADING LOG GENERATOR
+# Chạy khi grading_questions.json được public lúc 17:00
+# =============================================================================
+
+def generate_grading_log(
+    grading_questions_path: str,
+    output_path: str = "logs/grading_run.json",
+    retrieval_mode: str = "dense",
+    top_k_search: int = 10,
+    top_k_select: int = 5,
+) -> None:
+    """
+    Chạy pipeline với grading_questions.json và lưu log theo format bắt buộc.
+
+    Gọi hàm này sau khi grading_questions.json được public lúc 17:00:
+        generate_grading_log("data/grading_questions.json")
+    """
+    with open(grading_questions_path, encoding="utf-8") as f:
+        questions = json.load(f)
+
+    log = []
+    for q in questions:
+        try:
+            result = rag_answer(
+                q["question"],
+                retrieval_mode=retrieval_mode,
+                top_k_search=top_k_search,
+                top_k_select=top_k_select,
+                verbose=False,
+            )
+            log.append({
+                "id": q["id"],
+                "question": q["question"],
+                "answer": result["answer"],
+                "sources": result["sources"],
+                "chunks_retrieved": len(result["chunks_used"]),
+                "retrieval_mode": result["config"]["retrieval_mode"],
+                "timestamp": datetime.now().isoformat(),
+            })
+            print(f"  [{q['id']}] OK — {result['answer'][:70]}...")
+        except Exception as e:
+            log.append({
+                "id": q["id"],
+                "question": q["question"],
+                "answer": f"PIPELINE_ERROR: {e}",
+                "sources": [],
+                "chunks_retrieved": 0,
+                "retrieval_mode": retrieval_mode,
+                "timestamp": datetime.now().isoformat(),
+            })
+            print(f"  [{q['id']}] ERROR — {e}")
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(log, f, ensure_ascii=False, indent=2)
+    print(f"\nGrading log saved → {output_path} ({len(log)} entries)")
+
+
+# =============================================================================
 # MAIN — Chạy evaluation
 # =============================================================================
 
@@ -486,30 +592,25 @@ if __name__ == "__main__":
         print("Pipeline chưa implement. Hoàn thành Sprint 2 trước.")
         baseline_results = []
 
-    # --- Chạy Variant (sau khi Sprint 3 hoàn thành) ---
-    # TODO Sprint 4: Uncomment sau khi implement variant trong rag_answer.py
-    # print("\n--- Chạy Variant ---")
-    # variant_results = run_scorecard(
-    #     config=VARIANT_CONFIG,
-    #     test_questions=test_questions,
-    #     verbose=True,
-    # )
-    # variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
-    # (RESULTS_DIR / "scorecard_variant.md").write_text(variant_md, encoding="utf-8")
+    # --- Chạy Variant ---
+    print("\n--- Chạy Variant ---")
+    variant_results = run_scorecard(
+        config=VARIANT_CONFIG,
+        test_questions=test_questions,
+        verbose=True,
+    )
+    variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
+    (RESULTS_DIR / "scorecard_variant.md").write_text(variant_md, encoding="utf-8")
+    print(f"\nScorecard variant lưu tại: {RESULTS_DIR / 'scorecard_variant.md'}")
 
     # --- A/B Comparison ---
-    # TODO Sprint 4: Uncomment sau khi có cả baseline và variant
-    # if baseline_results and variant_results:
-    #     compare_ab(
-    #         baseline_results,
-    #         variant_results,
-    #         output_csv="ab_comparison.csv"
-    #     )
+    if baseline_results and variant_results:
+        compare_ab(
+            baseline_results,
+            variant_results,
+            output_csv="ab_comparison.csv",
+        )
 
-    print("\n\nViệc cần làm Sprint 4:")
-    print("  1. Hoàn thành Sprint 2 + 3 trước")
-    print("  2. Chấm điểm thủ công hoặc implement LLM-as-Judge trong score_* functions")
-    print("  3. Chạy run_scorecard(BASELINE_CONFIG)")
-    print("  4. Chạy run_scorecard(VARIANT_CONFIG)")
-    print("  5. Gọi compare_ab() để thấy delta")
-    print("  6. Cập nhật docs/tuning-log.md với kết quả và nhận xét")
+    print("\n\nSprint 4 hoàn thành!")
+    print("Để tạo grading log khi grading_questions.json được public:")
+    print("  generate_grading_log('data/grading_questions.json')")
