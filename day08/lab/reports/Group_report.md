@@ -4,7 +4,7 @@
 **Thành viên:**
 | Tên | Vai trò | Email |
 |-----|---------|-------|
-| Nguyễn Trần Hải Ninh | Tech Lead · Retrieval Owner · Eval Owner|----------------|
+| Nguyễn Trần Hải Ninh | Tech Lead · Retrieval Owner · Eval Owner| 26ai.ninhnth@vinuni.edu.vn |
 | Phạm Đăng Phong | Eval Owner · Documentation Owner | 26ai.phongpd@vinuni.edu.vn |
 
 **Ngày nộp:** 2026-04-13  
