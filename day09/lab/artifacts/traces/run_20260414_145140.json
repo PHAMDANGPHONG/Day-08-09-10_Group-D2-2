@@ -1,0 +1,72 @@
+{
+  "task": "Tài khoản bị khóa sau bao nhiêu lần đăng nhập sai?",
+  "route_reason": "default: no specific keyword matched → retrieval | no MCP needed",
+  "risk_high": false,
+  "needs_tool": false,
+  "hitl_triggered": false,
+  "retrieved_chunks": [
+    {
+      "text": "Q: Tôi quên mật khẩu, phải làm gì?\nA: Truy cập https://sso.company.internal/reset hoặc liên hệ Helpdesk qua ext. 9000. Mật khẩu mới sẽ được gửi qua email công ty trong vòng 5 phút.\n\nQ: Tài khoản bị khóa sau bao nhiêu lần đăng nhập sai?\nA: Tài khoản bị khóa sau 5 lần đăng nhập sai liên tiếp. Để mở khóa, liên hệ IT Helpdesk hoặc tự reset qua portal SSO.\n\nQ: Mật khẩu cần thay đổi định kỳ không?\nA: Có. Mật khẩu phải được thay đổi mỗi 90 ngày. Hệ thống sẽ nhắc nhở 7 ngày trước khi hết hạn.",
+      "source": "support/helpdesk-faq.md",
+      "score": 0.628,
+      "metadata": {
+        "access": "internal",
+        "section": "Section 1: Tài khoản và mật khẩu",
+        "effective_date": "2026-01-20",
+        "department": "IT",
+        "source": "support/helpdesk-faq.md"
+      }
+    },
+    {
+      "text": "IT Security thực hiện access review mỗi 6 tháng.\nMọi bất thường phải được báo cáo lên CISO trong vòng 24 giờ.",
+      "source": "it/access-control-sop.md",
+      "score": 0.4565,
+      "metadata": {
+        "section": "Section 6: Audit và review định kỳ",
+        "source": "it/access-control-sop.md",
+        "effective_date": "2026-01-01",
+        "department": "IT Security",
+        "access": "internal"
+      }
+    },
+    {
+      "text": "Q: Hộp thư đến đầy, phải làm gì?\nA: Xóa email cũ hoặc yêu cầu tăng dung lượng qua ticket IT-ACCESS. Dung lượng tiêu chuẩn là 50GB.\n\nQ: Tôi không nhận được email từ bên ngoài?\nA: Kiểm tra thư mục Spam trước. Nếu vẫn không có, tạo ticket P2 kèm địa chỉ email gửi và thời gian gửi.",
+      "source": "support/helpdesk-faq.md",
+      "score": 0.4027,
+      "metadata": {
+        "effective_date": "2026-01-20",
+        "department": "IT",
+        "source": "support/helpdesk-faq.md",
+        "access": "internal",
+        "section": "Section 5: Email và lịch"
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "it/access-control-sop.md",
+    "support/helpdesk-faq.md"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "Tài khoản bị khóa sau 5 lần đăng nhập sai liên tiếp. Để mở khóa, bạn có thể liên hệ IT Helpdesk hoặc tự reset qua portal SSO [1].",
+  "sources": [
+    "it/access-control-sop.md",
+    "support/helpdesk-faq.md"
+  ],
+  "confidence": 0.5,
+  "history": [
+    "[supervisor] received task: Tài khoản bị khóa sau bao nhiêu lần đăng nhập sai?",
+    "[supervisor] route=retrieval_worker | needs_tool=False | risk_high=False | reason=default: no specific keyword matched → retrieval | no MCP needed",
+    "[retrieval_worker] retrieved 3 chunks from ['it/access-control-sop.md', 'support/helpdesk-faq.md']",
+    "[synthesis_worker] answer generated, confidence=0.5, sources=['it/access-control-sop.md', 'support/helpdesk-faq.md']",
+    "[graph] completed in 3578ms"
+  ],
+  "workers_called": [
+    "retrieval_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 3578,
+  "run_id": "run_20260414_145140",
+  "question_id": "q04"
+}

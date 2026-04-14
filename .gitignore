@@ -4,7 +4,6 @@
 .env
 __pycache__
 .ipynb_checkpoints
-*.json
 
 # Grading questions — không public trước 17:00
 day08/lab/data/grading_questions.json
