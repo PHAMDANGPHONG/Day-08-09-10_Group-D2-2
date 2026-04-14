@@ -1,11 +1,11 @@
 # Báo Cáo Nhóm — Lab Day 09: Multi-Agent Orchestration
 
-**Tên nhóm:** Nhóm D2-2 (Phong & Ninh)
+**Tên nhóm:** Group-D2-2
 **Thành viên:**
 | Tên | Vai trò | Email |
 |-----|---------|-------|
-| Nguyễn Trần Hải Ninh | Supervisor Owner, Worker Owner, MCP Owner |  |
-| Phạm Đăng Phong | Trace & Docs Owner |  |
+| Nguyễn Trần Hải Ninh | Supervisor Owner, Worker Owner, MCP Owner | 26ai.ninhnth@vinuni.edu.vn |
+| Phạm Đăng Phong | Trace & Docs Owner | 26ai.phongpd@vinuni.edu.vn |
 
 **Ngày nộp:** 14/04/2026 
 **Repo:** D2-2/day09
