@@ -185,7 +185,7 @@ def analyze_traces(traces_dir: str = "artifacts/traces") -> dict:
 
     traces = []
     for fname in trace_files:
-        with open(os.path.join(traces_dir, fname)) as f:
+        with open(os.path.join(traces_dir, fname), encoding="utf-8") as f:
             traces.append(json.load(f))
 
     # Compute metrics
@@ -249,18 +249,21 @@ def compare_single_vs_multi(
     """
     multi_metrics = analyze_traces(multi_traces_dir)
 
-    # TODO: Load Day 08 results nếu có
-    # Nếu không có, dùng baseline giả lập để format
+    # Baseline từ Day 08 grading_run.json (10 câu hỏi, single-agent RAG)
     day08_baseline = {
-        "total_questions": 15,
-        "avg_confidence": 0.0,          # TODO: Điền từ Day 08 eval.py
-        "avg_latency_ms": 0,            # TODO: Điền từ Day 08
-        "abstain_rate": "?",            # TODO: Điền từ Day 08
-        "multi_hop_accuracy": "?",      # TODO: Điền từ Day 08
+        "total_questions": 10,
+        "avg_confidence": "not_tracked",   # Day 08 không có confidence scoring
+        "avg_latency_ms": "not_tracked",   # Day 08 không đo latency
+        "abstain_rate": "10%",             # gq07 (SLA penalty) trả lời abstain đúng (1/10)
+        "multi_hop_accuracy": "~70%",      # Ước tính từ grading answers (7/10 đúng)
+        "routing_visibility": "none",      # Single agent, không có supervisor/route_reason
+        "worker_isolation": "none",        # Không thể test từng bước độc lập
+        "mcp_support": "none",             # Không có MCP layer
+        "note": "Baseline từ day08/lab/logs/grading_run.json — single RAG pipeline",
     }
 
     if day08_results_file and os.path.exists(day08_results_file):
-        with open(day08_results_file) as f:
+        with open(day08_results_file, encoding="utf-8") as f:
             day08_baseline = json.load(f)
 
     comparison = {
@@ -268,11 +271,16 @@ def compare_single_vs_multi(
         "day08_single_agent": day08_baseline,
         "day09_multi_agent": multi_metrics,
         "analysis": {
-            "routing_visibility": "Day 09 có route_reason cho từng câu → dễ debug hơn Day 08",
-            "latency_delta": "TODO: Điền delta latency thực tế",
-            "accuracy_delta": "TODO: Điền delta accuracy thực tế từ grading",
-            "debuggability": "Multi-agent: có thể test từng worker độc lập. Single-agent: không thể.",
-            "mcp_benefit": "Day 09 có thể extend capability qua MCP không cần sửa core. Day 08 phải hard-code.",
+            "routing_visibility": "Day 09 có route_reason cho từng câu → dễ debug hơn Day 08 (không có routing)",
+            "latency_delta": f"Day 09 avg {multi_metrics.get('avg_latency_ms', 'N/A')}ms vs Day 08 not tracked. "
+                             "Multi-agent overhead do LLM calls phân tán qua nhiều workers.",
+            "accuracy_delta": "Day 08 abstain 10% (1/10). Day 09 có confidence scoring thực tế và HITL trigger.",
+            "debuggability": "Multi-agent: test từng worker độc lập, trace từng bước rõ ràng. "
+                             "Single-agent: phải debug toàn pipeline khi có lỗi.",
+            "mcp_benefit": "Day 09 có thể extend capability qua MCP (search_kb, get_ticket_info, "
+                           "check_access_permission) mà không sửa core. Day 08 phải hard-code.",
+            "worker_specialization": "Day 09 tách rõ retrieval vs policy vs synthesis → "
+                                     "mỗi worker có contract và có thể được tối ưu độc lập.",
         },
     }
 
