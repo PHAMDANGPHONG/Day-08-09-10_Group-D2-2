@@ -18,6 +18,9 @@ Gọi độc lập để test:
 
 import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
 WORKER_NAME = "synthesis_worker"
 
 SYSTEM_PROMPT = """Bạn là trợ lý IT Helpdesk nội bộ.
@@ -47,17 +50,6 @@ def _call_llm(messages: list) -> str:
             max_tokens=500,
         )
         return response.choices[0].message.content
-    except Exception:
-        pass
-
-    # Option B: Gemini
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        combined = "\n".join([m["content"] for m in messages])
-        response = model.generate_content(combined)
-        return response.text
     except Exception:
         pass
 

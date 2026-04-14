@@ -18,6 +18,12 @@ Gọi độc lập để test:
 import os
 import sys
 
+from dotenv import load_dotenv
+load_dotenv()
+
+import chromadb
+from openai import OpenAI
+
 # ─────────────────────────────────────────────
 # Worker Contract (xem contracts/worker_contracts.yaml)
 # Input:  {"task": str, "top_k": int = 3}
@@ -25,104 +31,77 @@ import sys
 # ─────────────────────────────────────────────
 
 WORKER_NAME = "retrieval_worker"
-DEFAULT_TOP_K = 3
+DEFAULT_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "3"))
+EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "../../day08/lab/chroma_db")
+COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "rag_lab")
+
+# Resolve path tương đối so với vị trí file này
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if not os.path.isabs(CHROMA_DB_PATH):
+    CHROMA_DB_PATH = os.path.normpath(os.path.join(_BASE_DIR, CHROMA_DB_PATH))
+
+_openai_client = None
+_chroma_collection = None
 
 
-def _get_embedding_fn():
-    """
-    Trả về embedding function.
-    TODO Sprint 1: Implement dùng OpenAI hoặc Sentence Transformers.
-    """
-    # Option A: Sentence Transformers (offline, không cần API key)
-    try:
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        def embed(text: str) -> list:
-            return model.encode([text])[0].tolist()
-        return embed
-    except ImportError:
-        pass
-
-    # Option B: OpenAI (cần API key)
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        def embed(text: str) -> list:
-            resp = client.embeddings.create(input=text, model="text-embedding-3-small")
-            return resp.data[0].embedding
-        return embed
-    except ImportError:
-        pass
-
-    # Fallback: random embeddings cho test (KHÔNG dùng production)
-    import random
-    def embed(text: str) -> list:
-        return [random.random() for _ in range(384)]
-    print("⚠️  WARNING: Using random embeddings (test only). Install sentence-transformers.")
-    return embed
+def _get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return _openai_client
 
 
 def _get_collection():
-    """
-    Kết nối ChromaDB collection.
-    TODO Sprint 2: Đảm bảo collection đã được build từ Step 3 trong README.
-    """
-    import chromadb
-    client = chromadb.PersistentClient(path="./chroma_db")
-    try:
-        collection = client.get_collection("day09_docs")
-    except Exception:
-        # Auto-create nếu chưa có
-        collection = client.get_or_create_collection(
-            "day09_docs",
-            metadata={"hnsw:space": "cosine"}
-        )
-        print(f"⚠️  Collection 'day09_docs' chưa có data. Chạy index script trong README trước.")
-    return collection
+    global _chroma_collection
+    if _chroma_collection is None:
+        client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+        try:
+            _chroma_collection = client.get_collection(COLLECTION_NAME)
+        except Exception as e:
+            raise RuntimeError(
+                f"Không tìm thấy ChromaDB collection '{COLLECTION_NAME}' tại '{CHROMA_DB_PATH}'. "
+                f"Lỗi: {e}"
+            )
+    return _chroma_collection
+
+
+def _embed(text: str) -> list:
+    """Embed text bằng OpenAI text-embedding-3-small."""
+    client = _get_openai_client()
+    resp = client.embeddings.create(input=text, model=EMBED_MODEL)
+    return resp.data[0].embedding
 
 
 def retrieve_dense(query: str, top_k: int = DEFAULT_TOP_K) -> list:
     """
     Dense retrieval: embed query → query ChromaDB → trả về top_k chunks.
 
-    TODO Sprint 2: Implement phần này.
-    - Dùng _get_embedding_fn() để embed query
-    - Query collection với n_results=top_k
-    - Format result thành list of dict
-
     Returns:
         list of {"text": str, "source": str, "score": float, "metadata": dict}
     """
-    # TODO: Implement dense retrieval
-    embed = _get_embedding_fn()
-    query_embedding = embed(query)
+    query_embedding = _embed(query)
+    collection = _get_collection()
 
-    try:
-        collection = _get_collection()
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k,
-            include=["documents", "distances", "metadatas"]
-        )
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents", "distances", "metadatas"],
+    )
 
-        chunks = []
-        for i, (doc, dist, meta) in enumerate(zip(
-            results["documents"][0],
-            results["distances"][0],
-            results["metadatas"][0]
-        )):
-            chunks.append({
-                "text": doc,
-                "source": meta.get("source", "unknown"),
-                "score": round(1 - dist, 4),  # cosine similarity
-                "metadata": meta,
-            })
-        return chunks
-
-    except Exception as e:
-        print(f"⚠️  ChromaDB query failed: {e}")
-        # Fallback: return empty (abstain)
-        return []
+    chunks = []
+    for doc, dist, meta in zip(
+        results["documents"][0],
+        results["distances"][0],
+        results["metadatas"][0],
+    ):
+        chunks.append({
+            "text": doc,
+            "source": meta.get("source", "unknown"),
+            "score": round(1 - dist, 4),   # cosine similarity
+            "metadata": meta,
+        })
+    return chunks
 
 
 def run(state: dict) -> dict:
