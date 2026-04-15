@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Dict, List, Tuple
 
 
@@ -109,6 +110,40 @@ def run_expectations(cleaned_rows: List[Dict[str, Any]]) -> Tuple[List[Expectati
             ok6,
             "halt",
             f"violations={len(bad_hr_annual)}",
+        )
+    )
+
+    # E7: không có effective_date trong tương lai sau khi clean
+    # (Rule B trong cleaning_rules.py chặn ở tầng transform; expectation này là lớp bảo vệ thứ hai)
+    today_str = date.today().isoformat()
+    future_rows = [
+        r for r in cleaned_rows
+        if (r.get("effective_date") or "") > today_str
+    ]
+    ok7 = len(future_rows) == 0
+    results.append(
+        ExpectationResult(
+            "no_future_effective_date",
+            ok7,
+            "halt",
+            f"future_date_rows={len(future_rows)}",
+        )
+    )
+
+    # E8: annotation [cleaned:...] không được xuất hiện trong doc không phải policy_refund_v4
+    # (guard chống regression nếu refund-fix regex vô tình match sang doc khác)
+    annotated_non_refund = [
+        r for r in cleaned_rows
+        if r.get("doc_id") != "policy_refund_v4"
+        and "[cleaned:" in (r.get("chunk_text") or "")
+    ]
+    ok8 = len(annotated_non_refund) == 0
+    results.append(
+        ExpectationResult(
+            "no_cleaned_annotation_in_non_refund",
+            ok8,
+            "warn",
+            f"unexpected_annotations={len(annotated_non_refund)}",
         )
     )
 

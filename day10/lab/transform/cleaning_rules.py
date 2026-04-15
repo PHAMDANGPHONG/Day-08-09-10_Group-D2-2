@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import re
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -25,6 +26,22 @@ ALLOWED_DOC_IDS = frozenset(
 
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _DMY_SLASH = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
+
+
+def _strip_control_chars(s: str) -> str:
+    """
+    Rule A — strip_bom_and_control_chars.
+    Xoá BOM (\\ufeff), zero-width space (\\u200b, \\u200c, \\u200d),
+    và non-breaking space (\\xa0) khỏi doc_id và chunk_text.
+
+    metric_impact: Inject một row với doc_id="\\ufeffpolicy_refund_v4" (BOM prefix).
+    Không có rule → quarantine (unknown_doc_id).
+    Có rule → BOM bị strip, row vào cleaned.  Delta: quarantine −1, cleaned +1.
+    """
+    s = s.lstrip('\ufeff')
+    s = s.replace('\u200b', '').replace('\u200c', '').replace('\u200d', '')
+    s = s.replace('\xa0', ' ')
+    return s.strip()
 
 
 def _norm_text(s: str) -> str:
@@ -83,11 +100,17 @@ def clean_rows(
     cleaned: List[Dict[str, Any]] = []
     seq = 0
 
+    _today = date.today().isoformat()
+
     for raw in rows:
         doc_id = raw.get("doc_id", "")
         text = raw.get("chunk_text", "")
         eff_raw = raw.get("effective_date", "")
         exported_at = raw.get("exported_at", "")
+
+        # Rule A: strip BOM và control chars trước khi kiểm tra allowlist
+        doc_id = _strip_control_chars(doc_id)
+        text = _strip_control_chars(text)
 
         if doc_id not in ALLOWED_DOC_IDS:
             quarantine.append({**raw, "reason": "unknown_doc_id"})
@@ -111,8 +134,35 @@ def clean_rows(
             )
             continue
 
+        # Rule B: quarantine future effective_date (chính sách chưa có hiệu lực)
+        # metric_impact: Inject row effective_date="2099-12-31", valid doc_id, non-empty text.
+        # Không có rule → vào cleaned.  Có rule → quarantine. Delta: quarantine +1, cleaned −1.
+        if eff_norm > _today:
+            quarantine.append(
+                {
+                    **raw,
+                    "reason": "future_effective_date",
+                    "effective_date_normalized": eff_norm,
+                }
+            )
+            continue
+
         if not text:
             quarantine.append({**raw, "reason": "missing_chunk_text"})
+            continue
+
+        # Rule C: normalize whitespace, sau đó quarantine chunk quá ngắn (< 20 ký tự)
+        # Bước normalize luôn áp dụng (giúp hash chunk_id ổn định hơn).
+        # metric_impact: Inject row chunk_text="  Xem mục 1.  " (11 chars sau strip).
+        # Không có rule → passes (> 8 char baseline E4). Có rule → quarantine. Delta: quarantine +1, cleaned −1.
+        text = " ".join(text.split())
+        if len(text) < 20:
+            quarantine.append(
+                {
+                    **raw,
+                    "reason": f"chunk_too_short_{len(text)}_chars",
+                }
+            )
             continue
 
         key = _norm_text(text)

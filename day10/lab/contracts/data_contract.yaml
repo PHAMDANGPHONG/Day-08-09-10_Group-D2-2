@@ -3,7 +3,7 @@
 
 version: "1.0"
 dataset: "kb_chunk_export"
-owner_team: "__TODO__"
+owner_team: "data-platform-team"
 
 schema_cleaned:
   chunk_id:
@@ -32,11 +32,20 @@ quality_rules:
   - id: "no_stale_refund_window"
     description: "Không được để chunk policy refund chứa cửa sổ 14 ngày (lệch so với v4 = 7 ngày)"
     severity: "halt"
+  - id: "no_future_effective_date"
+    description: "Cleaned rows must not have effective_date beyond today — future policy not yet in force"
+    severity: "halt"
+  - id: "chunk_min_length_20"
+    description: "chunk_text must be ≥20 chars after whitespace normalization to be retrieval-useful"
+    severity: "warn"
+  - id: "no_bom_or_control_chars"
+    description: "doc_id and chunk_text must be stripped of BOM/zero-width chars before allowlist check"
+    severity: "warn"
 
 freshness:
   measured_at: "publish"  # ingest | cleaned | publish
   sla_hours: 24
-  alert_channel: "__TODO__"
+  alert_channel: "#data-alerts-day10"
 
 canonical_sources:
   - path: "data/docs/policy_refund_v4.txt"
@@ -58,3 +67,5 @@ allowed_doc_ids:
 # Merit/Distinction: có thể đưa cutoff versioning vào env và tham chiếu ở đây (tránh hard-code trong code).
 policy_versioning:
   hr_leave_min_effective_date: "2026-01-01"
+  chunk_min_meaningful_length: 20
+  max_effective_date: "2099-01-01"  # override via MAX_EFFECTIVE_DATE env var
