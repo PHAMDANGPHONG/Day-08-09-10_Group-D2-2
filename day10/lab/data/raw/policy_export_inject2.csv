@@ -1,0 +1,10 @@
+chunk_id,doc_id,chunk_text,effective_date,exported_at
+1,policy_refund_v4,Yêu cầu được gửi trong vòng 7 ngày làm việc kể từ thời điểm xác nhận đơn hàng.,2026-02-01,2026-04-10T08:00:00
+2,policy_refund_v4,Yêu cầu hoàn tiền được chấp nhận trong vòng 14 ngày làm việc kể từ xác nhận đơn (ghi chú: bản sync cũ policy-v3 — lỗi migration).,2026-02-01,2026-04-10T08:00:00
+3,sla_p1_2026,Ticket P1 có SLA phản hồi ban đầu 15 phút và resolution trong 4 giờ.,2026-02-01,2026-04-10T08:00:00
+4,it_helpdesk_faq,Tài khoản bị khóa sau 5 lần đăng nhập sai liên tiếp.,2026-02-01,2026-04-10T08:00:00
+5,hr_leave_policy,Nhân viên dưới 3 năm kinh nghiệm được 12 ngày phép năm theo chính sách 2026.,2026-02-01,2026-04-10T08:00:00
+6,it_helpdesk_faq,FAQ bổ sung: đổi mật khẩu qua portal self-service có thể mất tối đa 24 giờ để đồng bộ toàn hệ thống.,01/02/2026,2026-04-10T08:00:00
+7,policy_refund_v4,Chính sách hoàn tiền dự kiến áp dụng từ năm tới theo lộ trình cải tiến dịch vụ khách hàng giai đoạn 2.,2099-12-31,2026-04-10T08:00:00
+8,sla_p1_2026,Xem mục 1.,2026-02-01,2026-04-10T08:00:00
+9,﻿policy_refund_v4,Yêu cầu hoàn tiền: xem chính sách refund phiên bản 4 để biết thêm chi tiết về điều kiện áp dụng.,2026-02-01,2026-04-10T08:00:00
