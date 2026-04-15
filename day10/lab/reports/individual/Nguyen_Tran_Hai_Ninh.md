@@ -1,7 +1,7 @@
-# Báo Cáo Cá Nhân — Lab Day 10: Data Pipeline & Observability
+# Báo Cáo Cá Nhân — Lab Day 10: Sprint 1–2 (Ingest & Clean & Quality & Embed)
 
-**Họ và tên:** Ning  
-**Vai trò:** Cleaning & Quality Owner + Monitoring / Docs Owner  
+**Họ và tên:** Nguyễn Trần Hải Ninh  
+**Vai trò:** Ingestion & Cleaning & Quality Owner  
 **Ngày nộp:** 2026-04-15  
 **Độ dài yêu cầu:** 400–650 từ
 
@@ -9,16 +9,24 @@
 
 ## 1. Tôi phụ trách phần nào?
 
-**File / module tôi sở hữu:**
-- `transform/cleaning_rules.py` — thêm hàm `_strip_control_chars()` (module level, trước `clean_rows`), và 3 rule mới bên trong `clean_rows()`: Rule A (strip BOM) tại trước bước allowlist check, Rule B (future date quarantine) sau HR stale check, Rule C (whitespace normalize + short chunk quarantine) sau empty text check. Cũng thêm `from datetime import date` vào imports.
-- `quality/expectations.py` — thêm E7 (`no_future_effective_date`, halt) và E8 (`no_cleaned_annotation_in_non_refund`, warn) trước dòng `halt = any(...)`. Thêm `from datetime import date`.
-- `contracts/data_contract.yaml` — điền `owner_team`, `alert_channel`, thêm 3 quality_rules mới, và 2 fields trong `policy_versioning`.
-- `data/raw/policy_export_inject2.csv` — tạo file CSV inject với BOM thật (row 9), future date (row 7), short chunk (row 8) để chứng minh 3 rule mới có tác động đo được.
-- Toàn bộ docs: `pipeline_architecture.md`, `data_contract.md`, `runbook.md`, `quality_report.md`.
+**File / module :**
+- `transform/cleaning_rules.py` — toàn bộ (baseline 6 rules + thêm 3 rule mới: strip BOM/control chars, future date quarantine, min length 20)
+- `quality/expectations.py` — toàn bộ (baseline 6 expectations + thêm E7, E8)
+- `etl_pipeline.py::cmd_run()` — ingest, clean, validate, embed,... 
+- `etl_pipeline.py::cmd_embed_internal()` — Chroma upsert + prune vector cũ logic
+- `data/raw/policy_export_dirty.csv` — input CSV mẫu (10 rows với 6 lỗi cố ý)
+- `contracts/data_contract.yaml` — điền schema, quality_rules,... 
+**Kết nối với thành viên khác:**
+- Tôi cung cấp: cleaned CSV, quarantine CSV, manifest, expectation results, Chroma collection đã embed
+- Phong dùng để: test eval retrieval, injection dataset, freshness check
+- Feedback loop: nếu Phong phát hiện eval fail → báo lại để kiểm tra rule/expectation cần điều chỉnh
 
-**Kết nối:** Lab thực hiện solo — tôi đảm nhận toàn bộ pipeline từ code đến documentation.
-
-**Bằng chứng:** Xem `artifacts/manifests/manifest_sprint3-fixed.json` (`run_id=sprint3-fixed`) và `artifacts/quarantine/quarantine_inject-rules-test.csv` (chứng minh Rule B và C hoạt động).
+**Bằng chứng thực tế:**
+- `artifacts/logs/run_sprint3-fixed.log` — ghi `raw_records`, `cleaned_records`, `quarantine_records`, `run_id`
+- `artifacts/cleaned/cleaned_sprint3-fixed.csv` — output sạch (6 rows)
+- `artifacts/quarantine/quarantine_sprint3-fixed.csv` — output quarantine (4 rows) với `reason` field
+- `artifacts/manifests/manifest_sprint3-fixed.json` — manifest đầy đủ metadata
+- `metrics_impact` table trong group report — chứng minh 3 rule mới có tác động đo được
 
 ---
 
@@ -38,13 +46,13 @@ Nguyên tắc: **halt khi correctness bị vi phạm, warn khi chỉ có data qu
 
 ## 3. Một lỗi / anomaly đã xử lý
 
-**Symptom:** Khi chạy pipeline lần đầu, tôi thấy `freshness_check=FAIL` ở tất cả các run, kể cả run sạch `sprint3-fixed`. Tôi nghi ngờ có bug trong `freshness_check.py`.
+**Symptom:** Khi chạy pipeline lần đầu, em thấy `freshness_check=FAIL` ở tất cả các run. Em nghi ngờ có bug trong `freshness_check.py`.
 
 **Phát hiện:** Mở `artifacts/manifests/manifest_sprint3-fixed.json`, thấy `"latest_exported_at": "2026-04-10T08:00:00"`. Tính toán: ngày chạy là `2026-04-15`, delta = 117 giờ >> SLA 24 giờ.
 
-**Diagnosis:** `latest_exported_at` được đọc từ cột `exported_at` trong CSV. File `policy_export_dirty.csv` có `exported_at=2026-04-10T08:00:00` cố định cho tất cả rows — đây là timestamp tĩnh trong file mẫu lab, không phải timestamp tự sinh khi chạy pipeline.
+**Diagnosis:** `latest_exported_at` được đọc từ cột `exported_at` trong CSV. File `policy_export_dirty.csv` có `exported_at=2026-04-10T08:00:00` cố định cho tất cả rows — đây là timestamp tĩnh trong file mẫu lab, không phải timestamp tự sinh.
 
-**Fix:** Không cần sửa code. Đây là hành vi đúng — trong production, `exported_at` được ghi tự động khi export từ database. Tôi document anomaly này trong `docs/runbook.md` (Incident 2) và `docs/quality_report.md` (Section 3) để tránh nhầm lẫn cho người xem sau.
+**Fix:** Không phải bug. Đây là hành vi đúng — CSV mẫu có dữ liệu cũ. Trong production, `exported_at` được ghi tự động. Em document anomaly này và Người B sẽ ghi trong runbook chi tiết.
 
 ---
 
