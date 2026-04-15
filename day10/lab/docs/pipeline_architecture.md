@@ -1,6 +1,6 @@
 # Kiến trúc pipeline — Lab Day 10
 
-**Nhóm:** Ning  
+**Nhóm:** Group-D2-2  
 **Cập nhật:** 2026-04-15
 
 ---

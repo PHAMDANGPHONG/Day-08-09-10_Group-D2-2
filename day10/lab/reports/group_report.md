@@ -2,9 +2,10 @@
 
 **Tên nhóm:** Ning  
 **Thành viên:**
-| Tên | Vai trò (Day 10) | Email |
-|-----|------------------|-------|
-| Ning | Cleaning & Quality Owner + Monitoring / Docs Owner | ning@vinuni.edu.vn |
+| Tên | Sprint | Vai trò | File chính | Email |
+|-----|--------|---------|-----------|-------|
+| Nguyễn Trần Hải Ninh | 1–2 | Ingestion & Cleaning & Quality Owner | `transform/cleaning_rules.py`, `quality/expectations.py`, `etl_pipeline.py::cmd_run()` | 26ai.ninhnth@vinuni.edu.vn |
+| Phạm Đăng Phong | 3–4 | Eval & Monitoring & Docs Owner | `eval_retrieval.py`, `monitoring/freshness_check.py`, `docs/runbook.md`, `docs/pipeline_architecture.md` | 26ai.phongpd@vinuni.edu.vn |
 
 **Ngày nộp:** 2026-04-15  
 **Repo:** e:/VinUni/assignments/Lecture-Day-08-09-10  
@@ -27,6 +28,23 @@ python eval_retrieval.py --out artifacts/eval/after_fixed_eval.csv
 ```
 
 `run_id` xuất hiện ở dòng đầu log: `run_id=sprint3-fixed`. Tất cả artifact files đều có suffix `_sprint3-fixed`.
+
+### 1a. Phân công chi tiết (2 người)
+
+**Ninh (Sprint 1–2):**
+- Ingest: `load_raw_csv()`, `LOG_DIR`, `manifest` schema
+- Transform: `cleaning_rules.py` (baseline + 3 rule mới: BOM strip, future date, min length)
+- Quality: `expectations.py` (baseline + E7, E8)
+- Embed: `cmd_embed_internal()` logic + Chroma upsert + prune
+- Input: `data/raw/policy_export_dirty.csv` (tạo/test)
+- Bằng chứng: Log file với `raw_records`, `cleaned_records`, `quarantine_records`
+
+**Phong (Sprint 3–4):**
+- Eval: `eval_retrieval.py` (before/after CSV)
+- Monitoring: `freshness_check.py`
+- Docs: `pipeline_architecture.md`, `data_contract.md`, `runbook.md` (3 incident scenarios)
+- Quality report: `docs/quality_report.md` (tóm tắt số liệu, before/after analysis)
+- Bằng chứng: `after_inject_bad.csv`, `after_fixed_eval.csv`, manifest với `latest_exported_at`
 
 ---
 
